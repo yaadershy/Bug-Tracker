@@ -1,0 +1,7 @@
+com\example\bugtracker\repo\FileBugRepository.class
+com\example\bugtracker\controller\BugController.class
+com\example\bugtracker\Application.class
+com\example\bugtracker\model\Bug.class
+com\example\bugtracker\model\Comment.class
+com\example\bugtracker\controller\AuthController.class
+com\example\bugtracker\repo\FileBugRepository$1.class

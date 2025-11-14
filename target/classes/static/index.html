@@ -1,0 +1,394 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Bug Tracker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root{
+      --bg: #f6f8fa;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --danger: #ef4444;
+      --radius: 12px;
+      --shadow: 0 6px 20px rgba(16,24,40,0.06);
+      font-family: Inter, system-ui, Arial, sans-serif;
+    }
+    body{ margin:0; background:var(--bg); color:#0f172a; }
+    body.dark{ --bg:#0b0f13; --card:#0f1417; --muted:#9aa4b2; --accent:#60a5fa; color:#e6eef5; }
+    .app { display:flex; gap:20px; max-width:1200px; margin:20px auto; padding:18px; align-items:stretch; }
+    /* Sidebar */
+    .sidebar { width:320px; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:hidden; }
+    .sidebar .top { padding:14px; border-bottom:1px solid rgba(0,0,0,0.04); display:flex; gap:8px; align-items:center; }
+    .search { flex:1; display:flex; gap:8px; align-items:center; }
+    .search input { width:100%; padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:inherit; }
+    .filters { padding:10px 14px; display:flex; gap:8px; flex-wrap:wrap; }
+    select, button { padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; cursor:pointer; }
+    .list { overflow:auto; padding:8px 12px; display:flex; flex-direction:column; gap:8px; }
+    .bug-row { background:linear-gradient(to bottom, transparent, transparent); padding:10px; border-radius:8px; cursor:pointer; display:flex; gap:10px; align-items:flex-start; border:1px solid rgba(0,0,0,0.03); }
+    .bug-row:hover { box-shadow: 0 8px 18px rgba(16,24,40,0.06); transform:translateY(-2px); transition:transform .12s; }
+    .meta-left { font-weight:600; }
+    .meta-right { margin-left:auto; font-size:12px; color:var(--muted); }
+    .badge { font-size:11px; padding:4px 8px; border-radius:999px; background:rgba(37,99,235,0.08); color:var(--accent); }
+    .priority-high { background:rgba(239,68,68,0.08); color:var(--danger); }
+    /* Main panel */
+    .main { flex:1; display:flex; flex-direction:column; gap:14px; }
+    .card { background:var(--card); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
+    .controls { display:flex; gap:8px; align-items:center; }
+    .row { display:flex; gap:10px; align-items:center; }
+    input, textarea, select { font-size:14px; padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.06); background:transparent; color:inherit; width:100%; }
+    textarea { min-height:110px; resize:vertical; }
+    .muted { color:var(--muted); font-size:13px; }
+    .footer { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    .btn { background:var(--accent); color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(37,99,235,0.12); }
+    .small { font-size:13px; padding:6px 8px; }
+    .attachments a { margin-right:8px; text-decoration:underline; cursor:pointer; color:var(--accent); font-size:13px; }
+    .comments { margin-top:10px; }
+    /* responsive */
+    @media (max-width: 920px){
+      .app { flex-direction:column; padding:12px; }
+      .sidebar { width:100%; max-height:260px; order:2; }
+      .main { order:1; }
+    }
+  </style>
+</head>
+<body>
+  <div style="max-width:1200px;margin:14px auto;padding:6px 18px;display:flex;justify-content:space-between;align-items:center;">
+    <h2 style="margin:0">Bug Tracker</h2>
+    <div>
+      <button id="darkToggle" class="small">Dark</button>
+      <span id="userBox" style="margin-left:10px;"></span>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar card" aria-label="Bugs list">
+      <div class="top">
+        <div class="search">
+          <input id="searchInput" placeholder="Search title / description / assigned..." />
+        </div>
+        <button id="refreshBtn" title="Refresh list" class="small">⟳</button>
+      </div>
+
+      <div class="filters">
+        <select id="statusFilter" title="Filter by status">
+          <option value="">All status</option>
+          <option>OPEN</option><option>IN_PROGRESS</option><option>CLOSED</option>
+        </select>
+        <select id="priorityFilter" title="Filter by priority">
+          <option value="">All priority</option>
+          <option>HIGH</option><option>MEDIUM</option><option>LOW</option>
+        </select>
+        <select id="sort" title="Sort">
+          <option value="createdAt">Newest</option>
+          <option value="priority">Priority</option>
+        </select>
+        <select id="order">
+          <option value="desc">desc</option><option value="asc">asc</option>
+        </select>
+      </div>
+
+      <div class="list" id="sidebarList" tabindex="0">
+        <!-- bug rows go here -->
+      </div>
+
+      <div style="padding:10px 14px;border-top:1px solid rgba(0,0,0,0.04);display:flex;justify-content:space-between;align-items:center;">
+        <div class="muted">Showing <span id="showCount">0</span></div>
+        <div>
+          <button id="loadMore" class="small ghost">Load more</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <section class="card">
+        <h3 style="margin-top:0">Create Bug</h3>
+        <div style="display:flex;gap:8px;">
+          <input id="title" placeholder="Title" />
+          <select id="priorityCreate"><option>LOW</option><option selected>MEDIUM</option><option>HIGH</option></select>
+          <input id="assignedTo" placeholder="Assign to (optional)" />
+        </div>
+        <div style="margin-top:10px;">
+          <textarea id="desc" placeholder="Description"></textarea>
+        </div>
+        <div class="footer" style="margin-top:8px;">
+          <div class="muted" style="flex:1">Tip: click a bug in the left list to open details</div>
+          <div>
+            <button id="createBtn" class="btn">Create</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="detailCard" class="card" style="display:none;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h3 id="detailTitle" style="margin:0">Bug</h3>
+          <div id="detailMeta" class="muted" style="margin-left:auto"></div>
+        </div>
+
+        <div style="margin-top:8px;" id="detailDesc"></div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+          <label>Status:
+            <select id="detailStatus"><option>OPEN</option><option>IN_PROGRESS</option><option>CLOSED</option></select>
+          </label>
+          <label>Assign: <input id="detailAssign" style="width:160px" /></label>
+          <button id="assignBtn" class="small">Assign</button>
+          <div style="margin-left:auto">
+            <button id="deleteBtn" class="small" style="background:transparent;border:1px solid rgba(0,0,0,0.06)">Delete</button>
+          </div>
+        </div>
+
+        <div class="attachments" id="detailAttachments" style="margin-top:12px"></div>
+
+        <div class="comments" id="detailComments"></div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+          <input id="commentText" placeholder="Write comment..." />
+          <button id="commentBtn" class="btn">Comment</button>
+        </div>
+
+        <div style="margin-top:10px;">
+          <input type="file" id="fileInput" multiple />
+          <button id="uploadBtn" class="small">Upload</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+/* --- API config (unchanged) --- */
+const api = '/api/bugs';
+const authApi = '/api/auth';
+let token = localStorage.getItem('bt_token') || null;
+let currentUser = null;
+
+function authHeader() { return token ? { 'Authorization': 'Bearer ' + token } : {}; }
+
+/* --- UI elements --- */
+const sidebarList = document.getElementById('sidebarList');
+const searchInput = document.getElementById('searchInput');
+const statusFilter = document.getElementById('statusFilter');
+const priorityFilter = document.getElementById('priorityFilter');
+const sortSel = document.getElementById('sort');
+const orderSel = document.getElementById('order');
+const showCount = document.getElementById('showCount');
+const loadMoreBtn = document.getElementById('loadMore');
+
+const createBtn = document.getElementById('createBtn');
+const titleInput = document.getElementById('title');
+const descInput = document.getElementById('desc');
+const priorityCreate = document.getElementById('priorityCreate');
+const assignedToCreate = document.getElementById('assignedTo');
+
+const detailCard = document.getElementById('detailCard');
+const detailTitle = document.getElementById('detailTitle');
+const detailMeta = document.getElementById('detailMeta');
+const detailDesc = document.getElementById('detailDesc');
+const detailStatus = document.getElementById('detailStatus');
+const detailAssign = document.getElementById('detailAssign');
+const assignBtn = document.getElementById('assignBtn');
+const deleteBtn = document.getElementById('deleteBtn');
+const detailAttachments = document.getElementById('detailAttachments');
+const detailComments = document.getElementById('detailComments');
+const commentBtn = document.getElementById('commentBtn');
+const commentText = document.getElementById('commentText');
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const refreshBtn = document.getElementById('refreshBtn');
+const darkToggle = document.getElementById('darkToggle');
+const userBox = document.getElementById('userBox');
+
+/* --- client state --- */
+let allBugs = [];
+let visibleBugs = [];
+let pageSize = 30;
+let page = 1;
+let selectedBug = null;
+
+/* --- helpers --- */
+function debounce(fn, wait=250){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); } }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, (m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[m])); }
+
+/* --- Data fetching and rendering --- */
+async function fetchAllFromServer(){
+  try {
+    const q = new URLSearchParams({ sort: sortSel.value, order: orderSel.value, status: statusFilter.value }).toString();
+    const res = await fetch(api + '?' + q);
+    if (!res.ok) { console.error('fetch failed', res.status); return []; }
+    const json = await res.json();
+    return json;
+  } catch(e){ console.error(e); return []; }
+}
+
+function applyClientFilters(list){
+  const q = (searchInput.value||'').trim().toLowerCase();
+  const p = priorityFilter.value;
+  let filtered = list.filter(b=>{
+    if (p && b.priority !== p) return false;
+    if (q === '') return true;
+    return ((b.title||'') + ' ' + (b.description||'') + ' ' + (b.assignedTo||'')).toLowerCase().includes(q);
+  });
+  return filtered;
+}
+
+function renderSidebar(list){
+  sidebarList.innerHTML = '';
+  visibleBugs = list.slice(0, page*pageSize);
+  showCount.innerText = visibleBugs.length + ' / ' + list.length;
+  for (const b of visibleBugs){
+    const el = document.createElement('div');
+    el.className = 'bug-row';
+    el.dataset.id = b.id;
+    el.innerHTML = `
+      <div style="flex:1">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="meta-left">${escapeHtml(b.title || '(no title)')}</div>
+          <div class="meta-right">${new Date(b.createdAt).toLocaleString()}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <div class="muted">${escapeHtml(b.assignedTo || 'Unassigned')}</div>
+          <div style="margin-left:auto;font-size:12px;color:var(--muted)">${escapeHtml(b.priority)}</div>
+        </div>
+      </div>
+    `;
+    el.onclick = ()=>selectBug(b.id);
+    sidebarList.appendChild(el);
+  }
+}
+
+/* load & filter flow */
+async function loadAndRender(){
+  allBugs = await fetchAllFromServer();
+  const filtered = applyClientFilters(allBugs);
+  renderSidebar(filtered);
+  if (filtered.length > visibleBugs.length) loadMoreBtn.style.display = 'inline-block'; else loadMoreBtn.style.display='none';
+}
+
+/* --- select and show detail --- */
+async function selectBug(id){
+  const b = allBugs.find(x => x.id === id) || (await (await fetch(api + '/' + id)).json());
+  if (!b) return;
+  selectedBug = b;
+  detailCard.style.display = 'block';
+  detailTitle.innerText = b.title || `#${b.id}`;
+  detailMeta.innerText = `#${b.id} • ${b.status} • ${b.priority}`;
+  detailDesc.innerHTML = `<div class="muted">${escapeHtml(b.description || '')}</div>`;
+  detailStatus.value = b.status || 'OPEN';
+  detailAssign.value = b.assignedTo || '';
+  // attachments
+  detailAttachments.innerHTML = '';
+  (b.attachments||[]).forEach(path=>{
+    const nm = path.split('/').pop();
+    const a = document.createElement('a');
+    a.innerText = nm;
+    a.onclick = async ()=> {
+      const resp = await fetch(`/api/bugs/${b.id}/attachment?name=${encodeURIComponent(nm)}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url,'_blank');
+    };
+    detailAttachments.appendChild(a);
+  });
+  // comments
+  const resp = await fetch(`${api}/${b.id}/comments`);
+  detailComments.innerHTML = '<h4>Comments</h4>';
+  if (resp.ok){
+    const comments = await resp.json();
+    comments.forEach(c=>{
+      const div = document.createElement('div');
+      div.style.borderTop='1px dashed rgba(0,0,0,0.06)';
+      div.style.padding='8px 0';
+      div.innerHTML = `<div style="font-weight:600">${escapeHtml(c.author||'Anonymous')} <span style="font-weight:400;color:var(--muted);font-size:12px"> • ${new Date(c.createdAt).toLocaleString()}</span></div><div>${escapeHtml(c.text)}</div>`;
+      detailComments.appendChild(div);
+    });
+  }
+}
+
+/* --- create / update / delete / comment / upload handlers --- */
+createBtn.onclick = async ()=>{
+  const title = titleInput.value.trim();
+  if (!title) return alert('Title required');
+  const bug = { title, description: descInput.value.trim(), priority: priorityCreate.value, assignedTo: assignedToCreate.value.trim() || null };
+  const r = await fetch(api, { method:'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeader()), body: JSON.stringify(bug) });
+  if (r.ok){ titleInput.value=''; descInput.value=''; assignedToCreate.value=''; page=1; await loadAndRender(); }
+  else if (r.status===401) alert('Login required');
+  else { console.error('create failed', r.status); alert('Create failed'); }
+};
+
+assignBtn.onclick = async ()=>{
+  if (!selectedBug) return;
+  const val = detailAssign.value.trim() || null;
+  const r = await fetch(`${api}/${selectedBug.id}/assign`, { method:'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeader()), body: JSON.stringify({ assignedTo: val }) });
+  if (r.ok) { await loadAndRender(); selectBug(selectedBug.id); } else alert('Assign failed');
+};
+
+detailStatus.onchange = async ()=>{
+  if (!selectedBug) return;
+  const r = await fetch(`${api}/${selectedBug.id}`, { method:'PUT', headers: Object.assign({'Content-Type':'application/json'}, authHeader()), body: JSON.stringify(Object.assign({}, selectedBug, { status: detailStatus.value })) });
+  if (r.ok) { await loadAndRender(); selectBug(selectedBug.id); } else alert('Update failed');
+};
+
+deleteBtn.onclick = async ()=>{
+  if (!selectedBug) return;
+  if (!confirm('Delete this bug?')) return;
+  const r = await fetch(`${api}/${selectedBug.id}`, { method:'DELETE', headers: authHeader() });
+  if (r.status===204) { selectedBug = null; detailCard.style.display='none'; await loadAndRender(); }
+  else alert('Delete failed');
+};
+
+commentBtn.onclick = async ()=>{
+  if (!selectedBug) return;
+  const txt = commentText.value.trim(); if (!txt) return;
+  const r = await fetch(`${api}/${selectedBug.id}/comments`, { method:'POST', headers: Object.assign({'Content-Type':'application/json'}, authHeader()), body: JSON.stringify({ text: txt, author: currentUser || 'Anonymous' }) });
+  if (r.ok){ commentText.value=''; selectBug(selectedBug.id); loadAndRender(); } else if (r.status===401) alert('Login required'); else alert('Comment failed');
+};
+
+uploadBtn.onclick = async ()=>{
+  if (!selectedBug) return;
+  const files = fileInput.files; if (!files || files.length===0) return alert('Select files');
+  const form = new FormData();
+  for(const f of files) form.append('files', f);
+  const r = await fetch(`${api}/${selectedBug.id}/attachments`, { method:'POST', headers: authHeader(), body: form });
+  if (r.ok){ fileInput.value=''; selectBug(selectedBug.id); loadAndRender(); } else alert('Upload failed');
+};
+
+/* --- UI control handlers --- */
+refreshBtn.onclick = ()=>{ page=1; loadAndRender(); };
+loadMoreBtn.onclick = ()=>{ page++; loadAndRender(); };
+searchInput.oninput = debounce(()=>{ page=1; loadAndRender(); }, 220);
+statusFilter.onchange = ()=>{ page=1; loadAndRender(); };
+priorityFilter.onchange = ()=>{ page=1; loadAndRender(); };
+sortSel.onchange = ()=>{ page=1; loadAndRender(); };
+orderSel.onchange = ()=>{ page=1; loadAndRender(); };
+
+/* --- Dark mode and simple auth display --- */
+darkToggle.onclick = ()=>{
+  document.body.classList.toggle('dark');
+  darkToggle.innerText = document.body.classList.contains('dark') ? 'Light' : 'Dark';
+};
+
+async function whoami(){
+  if (!token) { userBox.innerText = ''; return; }
+  try {
+    const r = await fetch(authApi + '/whoami', { headers: authHeader() });
+    if (r.ok){ const j = await r.json(); currentUser = j.username; userBox.innerText = currentUser; }
+    else { localStorage.removeItem('bt_token'); token = null; currentUser = null; userBox.innerText = ''; }
+  } catch(e){ console.error(e); localStorage.removeItem('bt_token'); token = null; currentUser=null; userBox.innerText=''; }
+}
+
+/* --- Initial load --- */
+(async function init(){
+  await whoami();
+  await loadAndRender();
+})();
+</script>
+</body>
+</html>
+
+
+
+
